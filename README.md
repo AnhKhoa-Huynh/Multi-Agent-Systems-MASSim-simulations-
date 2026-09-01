@@ -1,7 +1,4 @@
-This project is based on the 
-[Multi-Agent Programming Contest](https://multiagentcontest.org/),
-where agents are programmed to compete with each other in a
-predefined game.
+This project designed autonomous agents to compete or work collaboratively with each other in a predefined environment.
 
 _MASSim_ simulations run in discrete steps. Agents connect remotely to the
 contest server, receive percepts and send their actions, which are in turn
