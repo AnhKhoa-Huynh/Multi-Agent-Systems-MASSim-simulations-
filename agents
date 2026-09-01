@@ -1,0 +1,475 @@
+/*
+clone the prof's github and replace the conectionA.asl file there (https://github.com/rafaelcaue/CS551K-Contest25-26.git 
+starterKits/jasonDummyA/connectionA.asl with this code below to run the simulation 
+*/
+
+adjacent_dir( 0,-1,n).  adjacent_dir( 0, 1,s).  adjacent_dir( 1, 0,e).  adjacent_dir(-1, 0,w).
+dir_delta(n, 0,-1).     dir_delta(s, 0, 1).     dir_delta(e, 1, 0).     dir_delta(w,-1, 0).
+opposite_dir(n,s).      opposite_dir(s,n).      opposite_dir(e,w).      opposite_dir(w,e).
+coord_to_dir(0,-1,n).   coord_to_dir(0, 1,s).   coord_to_dir(1, 0,e).   coord_to_dir(-1,0,w).
+
+abs(V,A) :- V >= 0 & A = V.
+abs(V,A) :- V < 0 & A = (0 - V).
+manhattan(X1,Y1,X2,Y2,D) :- DX = (X1 - X2) & DY = (Y1 - Y2) & abs(DX,ADX) & abs(DY,ADY) & D = (ADX + ADY).
+
+carrying_any :- attached(_,_).
+carrying_type(BT) :- attached(AX,AY) & thing(AX,AY,block,BT).
+on_goal :- terrain(0,0,goal).
+
+own_attached_block(DX,DY) :- attached(DX,DY).
+
+known_wall_dir(Dir) :- pos(X,Y) & wall_at(X,Y,Dir).
+
+blocked_step(DX,DY) :- thing(DX,DY,obstacle,_).
+blocked_step(DX,DY) :- thing(DX,DY,entity,_).
+blocked_step(DX,DY) :- thing(DX,DY,dispenser,_).
+blocked_step(DX,DY) :- thing(DX,DY,block,_) & not own_attached_block(DX,DY).
+
+locally_blocked_dir(Dir) :- known_wall_dir(Dir) | (dir_delta(Dir,DX,DY) & blocked_step(DX,DY)).
+backtracks(Dir) :- last_pos(LX,LY) & pos(X,Y) & dir_delta(Dir,DX,DY) & NX = (X+DX) & NY = (Y+DY) & NX == LX & NY == LY.
+tabu_dir(Dir) :- tabu(Dir,T) & T > 0.
+unvisited_dir(Dir) :- pos(X,Y) & dir_delta(Dir,DX,DY) & NX = (X+DX) & NY = (Y+DY) & not visited(NX,NY).
+
+teammate_visible :- my_team(T) & thing(DX,DY,entity,T) & (DX \== 0 | DY \== 0).
+teammate_adjacent(Dir) :- my_team(T) & thing(DX,DY,entity,T) & adjacent_dir(DX,DY,Dir).
+
+agent_index(1) :- me(connectionA1).
+agent_index(2) :- me(connectionA2).
+agent_index(3) :- me(connectionA3).
+agent_index(4) :- me(connectionA4).
+agent_index(5) :- me(connectionA5).
+
+is_builder :- me(connectionA1).
+is_coordinator :- me(connectionA1).
+is_helper :- agent_index(I) & (I == 2 | I == 3 | I == 4).
+is_scout :- me(connectionA5).
+
+req_satisfied(RX,RY,BT) :- attached(RX,RY) & thing(RX,RY,block,BT).
+
+two_block_task :-
+  current_task(_,_,_,Reqs) &
+  .member(req(R1X,R1Y,_T1),Reqs) &
+  .member(req(R2X,R2Y,_T2),Reqs) &
+  (R1X \== R2X | R1Y \== R2Y).
+
+both_adjacent :-
+  current_task(_,_,_,Reqs) &
+  .member(req(R1X,R1Y,_T1),Reqs) & manhattan(R1X,R1Y,0,0,D1) & D1 == 1 &
+  .member(req(R2X,R2Y,_T2),Reqs) & manhattan(R2X,R2Y,0,0,D2) & D2 == 1 &
+  (R1X \== R2X | R1Y \== R2Y).
+
+req_adj(req(RX,RY,BT)) :- current_task(_,_,_,Reqs) & .member(req(RX,RY,BT),Reqs) & manhattan(RX,RY,0,0,D) & D == 1.
+req_far(req(RX,RY,BT)) :- current_task(_,_,_,Reqs) & .member(req(RX,RY,BT),Reqs) & manhattan(RX,RY,0,0,D) & D == 2.
+
+pick_adj_req(RX,RY,BT) :- req_adj(req(RX,RY,BT)).
+pick_far_req_not(AX,AY,RX,RY,BT) :- req_far(req(RX,RY,BT)) & (RX \== AX | RY \== AY).
+
+task_complete(Reqs) :- not ( .member(req(RX,RY,BT),Reqs) & not req_satisfied(RX,RY,BT) ).
+
++current_task(_TN,_DL,_RW,_Reqs) : false <- true.
++known_task(_TN,_DL,_RW,_Reqs) : false <- true.
++best_task(_TN,_Score) : false <- true.
+
++pending_attach(_Dir) : false <- true.
++print_cd(_C) : false <- true.
++share_cd(_C) : false <- true.
++taskprint_cd(_C) : false <- true.
+
++escape_mode(_E) : false <- true.
++stuck_steps(_K) : false <- true.
+
++builder_patrol_phase(_P) : false <- true.
++helper_poll_cd(_C) : false <- true.
+
++help_ticket(_TN,_BT,_State,_Tick) : false <- true.
++helper_job(_TN,_BT,phase(_P),issued(_T),owner(_O)) : false <- true.
+
+!start.
++!start : true <-
+  .my_name(Me);
+  +me(Me);
+  +pos(0,0);
+  +last_pos(999999,999999);
+  +tick(0);
+  -stuck_steps(_); +stuck_steps(0);
+  -escape_mode(_); +escape_mode(0);
+  -print_cd(_); +print_cd(0);
+  -taskprint_cd(_); +taskprint_cd(0);
+  -share_cd(_); +share_cd(0);
+  -builder_patrol_phase(_); +builder_patrol_phase(0);
+  -helper_poll_cd(_); +helper_poll_cd(0);
+  .print("[",Me,"] started.").
+
++actionID(_X) : true <-
+  !tick_step;
+  !decay_small;
+  !update_from_last_action;
+  !memorize_world;
+  !memorize_tasks;
+  !share_if_teammate_visible;
+  !task_select;
+  !maybe_print;
+  !maybe_print_tasks;
+  !do_step.
+
+!tick_step.
++!tick_step : tick(T) <- -tick(T); T2 = (T+1); +tick(T2).
+
+!decay_small.
++!decay_small : print_cd(C) & C > 0 <- -print_cd(C); C2 = (C-1); +print_cd(C2).
++!decay_small : taskprint_cd(C) & C > 0 <- -taskprint_cd(C); C2 = (C-1); +taskprint_cd(C2).
++!decay_small : share_cd(C) & C > 0 <- -share_cd(C); C2 = (C-1); +share_cd(C2).
++!decay_small : tabu(Dir,T) & T > 0 <- -tabu(Dir,T); T2 = (T-1); +tabu(Dir,T2).
++!decay_small : escape_mode(E) & E > 0 <- -escape_mode(E); E2 = (E-1); +escape_mode(E2).
++!decay_small : helper_poll_cd(H) & H > 0 <- -helper_poll_cd(H); H2 = (H-1); +helper_poll_cd(H2).
++!decay_small : true <- true.
+
+!update_from_last_action.
+
++!update_from_last_action :
+  pos(X,Y) & lastAction(move) & lastActionResult(success) &
+  lastActionParams([Dir]) & dir_delta(Dir,DX,DY) <-
+    -last_pos(_,_); +last_pos(X,Y);
+    -pos(X,Y); X2 = (X+DX); Y2 = (Y+DY); +pos(X2,Y2);
+    -stuck_steps(_); +stuck_steps(0).
+
++!update_from_last_action :
+  pos(X,Y) & lastAction(move) & (lastActionResult(failed_forbidden) | lastActionResult(failed_path)) &
+  lastActionParams([Dir]) <-
+    -wall_at(X,Y,Dir); +wall_at(X,Y,Dir).
+
++!update_from_last_action :
+  lastAction(move) & lastActionResult(R) &
+  R \== success & R \== random_failure &
+  lastActionParams([Dir]) & stuck_steps(K) <-
+    -tabu(Dir,_); +tabu(Dir,4);
+    -stuck_steps(K); K2 = (K+1); +stuck_steps(K2).
+
++!update_from_last_action :
+  stuck_steps(K) & K >= 3 & escape_mode(0) <-
+    -escape_mode(0); +escape_mode(10);
+    -stuck_steps(K); +stuck_steps(0);
+    .my_name(Me); .print("[",Me,"] ENTER ESCAPE MODE").
+
++!update_from_last_action : true <- true.
+
+!memorize_world.
++!memorize_world : pos(X,Y) & not visited(X,Y) <- +visited(X,Y).
+
++!memorize_world :
+  pos(X0,Y0) & thing(DX,DY,dispenser,BT) &
+  GX = (X0+DX) & GY = (Y0+DY) &
+  not known_dispenser(GX,GY,BT) <-
+    +known_dispenser(GX,GY,BT);
+    .my_name(Me); .print("[",Me,"] MEM dispenser ",BT," @(",GX,",",GY,")").
+
++!memorize_world :
+  pos(X0,Y0) & terrain(TX,TY,goal) &
+  GX = (X0+TX) & GY = (Y0+TY) &
+  not known_goal(GX,GY) <-
+    +known_goal(GX,GY);
+    .my_name(Me); .print("[",Me,"] MEM GOAL @(",GX,",",GY,")").
+
++!memorize_world : true <- true.
+
+!memorize_tasks.
++!memorize_tasks : task(TN,DL,RW,Reqs) & not known_task(TN,_,_,_) <- +known_task(TN,DL,RW,Reqs).
++!memorize_tasks : task(TN,DL,RW,Reqs) & known_task(TN,_,_,_) <- -known_task(TN,_,_,_); +known_task(TN,DL,RW,Reqs).
++!memorize_tasks : true <- true.
+
+!share_if_teammate_visible.
++!share_if_teammate_visible : teammate_visible & share_cd(0) <-
+  -share_cd(0); +share_cd(3);
+  .my_name(Me); .print("[",Me,"] SHARE visible teammate -> broadcast mem");
+  !share_one_goal;
+  !share_one_dispenser;
+  !share_one_ticket.
++!share_if_teammate_visible : true <- true.
+
+!share_one_dispenser.
++!share_one_dispenser : known_dispenser(X,Y,BT) <- .broadcast(tell, mem_dispenser(X,Y,BT)).
++!share_one_dispenser : true <- true.
+
+!share_one_goal.
++!share_one_goal : known_goal(X,Y) <- .broadcast(tell, mem_goal(X,Y)).
++!share_one_goal : true <- true.
+
+!share_one_ticket.
++!share_one_ticket : is_builder & help_ticket(TN,BT,State,Tick0) <- .broadcast(tell, mem_ticket(TN,BT,State,Tick0)).
++!share_one_ticket : true <- true.
+
++message(From,tell,mem_dispenser(X,Y,BT)) : not known_dispenser(X,Y,BT) <-
+  +known_dispenser(X,Y,BT);
+  .my_name(Me); .print("[",Me,"] RECV dispenser ",BT," from ",From," @(",X,",",Y,")").
+
++message(From,tell,mem_goal(X,Y)) : not known_goal(X,Y) <-
+  +known_goal(X,Y);
+  .my_name(Me); .print("[",Me,"] RECV GOAL from ",From," @(",X,",",Y,")").
+
++message(From,tell,mem_ticket(TN,BT,State,Tick0)) : not help_ticket(TN,BT,_,_) <-
+  +help_ticket(TN,BT,State,Tick0);
+  .my_name(Me); .print("[",Me,"] RECV ticket ",TN," ",BT," state=",State," from ",From).
+
++message(From,tell,mem_ticket(TN,BT,State,Tick0)) : help_ticket(TN,BT,_,_) <-
+  -help_ticket(TN,BT,_,_); +help_ticket(TN,BT,State,Tick0);
+  .my_name(Me); .print("[",Me,"] UPDATE ticket ",TN," ",BT," state=",State," from ",From).
+
+!task_select.
++!task_select :
+  is_coordinator & task(TN,DL,RW,_Reqs) &
+  S = ((RW*1000)/(DL+1)) & not best_task(_,_) <- +best_task(TN,S).
++!task_select :
+  is_coordinator & task(TN,DL,RW,_Reqs) &
+  S = ((RW*1000)/(DL+1)) &
+  best_task(OldTN,OldS) & S > OldS <- -best_task(OldTN,OldS); +best_task(TN,S).
+
++!task_select :
+  is_builder & best_task(TN,_) &
+  not current_task(_,_,_,_) & known_task(TN,DL,RW,Reqs) <-
+    +current_task(TN,DL,RW,Reqs);
+    -help_ticket(_,_,_,_);
+    .my_name(Me); .print("[",Me,"] BUILDER picked task=",TN," dl=",DL," rw=",RW).
+
++!task_select : true <- true.
+
+!idle_action.
++!idle_action : true <- rotate(cw).
+
+!move_order(D0,D1,D2,D3).
++!move_order(D0,_,_,_) : not locally_blocked_dir(D0) & not tabu_dir(D0) & not backtracks(D0) <- move(D0).
++!move_order(_,D1,_,_) : not locally_blocked_dir(D1) & not tabu_dir(D1) & not backtracks(D1) <- move(D1).
++!move_order(_,_,D2,_) : not locally_blocked_dir(D2) & not tabu_dir(D2) & not backtracks(D2) <- move(D2).
++!move_order(_,_,_,D3) : not locally_blocked_dir(D3) & not tabu_dir(D3) & not backtracks(D3) <- move(D3).
++!move_order(_,_,_,_) : not locally_blocked_dir(n) <- move(n).
++!move_order(_,_,_,_) : not locally_blocked_dir(s) <- move(s).
++!move_order(_,_,_,_) : not locally_blocked_dir(e) <- move(e).
++!move_order(_,_,_,_) : not locally_blocked_dir(w) <- move(w).
++!move_order(_,_,_,_) : true <- !idle_action.
+
+!move_toward(DX,DY).
++!move_toward(DX,DY) : DX > 0 <- !move_order(e,n,s,w).
++!move_toward(DX,DY) : DX < 0 <- !move_order(w,n,s,e).
++!move_toward(DX,DY) : DY > 0 <- !move_order(s,e,w,n).
++!move_toward(DX,DY) : DY < 0 <- !move_order(n,e,w,s).
++!move_toward(_,_ )  : true   <- !move_order(n,s,e,w).
+
+!explore_move.
++!explore_move : unvisited_dir(n) <- !move_order(n,e,w,s).
++!explore_move : unvisited_dir(s) <- !move_order(s,e,w,n).
++!explore_move : unvisited_dir(e) <- !move_order(e,n,s,w).
++!explore_move : unvisited_dir(w) <- !move_order(w,n,s,e).
++!explore_move : agent_index(I) & I == 1 <- !move_order(e,n,s,w).
++!explore_move : agent_index(I) & I == 2 <- !move_order(w,n,s,e).
++!explore_move : agent_index(I) & I == 3 <- !move_order(n,e,w,s).
++!explore_move : agent_index(I) & I == 4 <- !move_order(s,e,w,n).
++!explore_move : agent_index(I) & I == 5 <- !move_order(e,s,n,w).
++!explore_move : true <- !move_order(n,s,e,w).
+
+!maybe_print.
++!maybe_print : print_cd(0) & tick(T) & pos(X,Y) & is_builder & current_task(TN,DL,RW,_) <-
+  -print_cd(0); +print_cd(10); .my_name(Me);
+  .print("[",Me,"] t=",T," pos=(",X,",",Y,") task=",TN," dl=",DL," rw=",RW," carry=",carrying_any," goalKnown=",known_goal(_,_)).
++!maybe_print : print_cd(0) & tick(T) & pos(X,Y) & not is_builder <-
+  -print_cd(0); +print_cd(15); .my_name(Me);
+  .print("[",Me,"] t=",T," pos=(",X,",",Y,") exploring carry=",carrying_any," goalKnown=",known_goal(_,_)).
++!maybe_print : true <- true.
+
+!maybe_print_tasks.
++!maybe_print_tasks : taskprint_cd(0) & tick(T) & task(TN,DL,RW,_Reqs) <-
+  -taskprint_cd(0); +taskprint_cd(20);
+  .my_name(Me); .print("[",Me,"] SEE task=",TN," dl=",DL," rw=",RW," at t=",T).
++!maybe_print_tasks : true <- true.
+
++message(_From,tell,claim_ticket(TN,BT,Helper)) :
+  is_builder & help_ticket(TN,BT,open,Tick0) <-
+    -help_ticket(TN,BT,open,Tick0);
+    +help_ticket(TN,BT,taken(Helper),Tick0);
+    .broadcast(tell, ticket_taken(TN,BT,Helper));
+    .my_name(Me); .print("[",Me,"] ticket taken by ",Helper," for ",BT," task=",TN).
+
++message(_From,tell,ticket_taken(TN,BT,Helper)) :
+  not is_builder & help_ticket(TN,BT,open,Tick0) <-
+    -help_ticket(TN,BT,open,Tick0);
+    +help_ticket(TN,BT,taken(Helper),Tick0).
+
++message(_From,tell,ticket_done(TN,BT)) :
+  help_ticket(TN,BT,State,Tick0) <-
+    -help_ticket(TN,BT,State,Tick0);
+    +help_ticket(TN,BT,done,Tick0).
+
+!do_step.
++!do_step : true <- !do_step2.
+
++!do_step2 : pending_attach(Dir) <- -pending_attach(Dir); attach(Dir).
++!do_step2 : escape_mode(E) & E > 0 <- !move_order(n,s,e,w).
++!do_step2 : is_builder <- !builder_step.
++!do_step2 : is_helper <- !helper_step.
++!do_step2 : is_scout <- !scout_step.
++!do_step2 : true <- !explore_move.
+
+!builder_step.
+
++!builder_step :
+  current_task(TN,_,_,Reqs) &
+  task_complete(Reqs) &
+  on_goal <- submit(TN).
+
++!builder_step :
+  current_task(_TN,_,_,Reqs) &
+  task_complete(Reqs) &
+  not on_goal & known_goal(GX,GY) & pos(X,Y) &
+  DX = (GX - X) & DY = (GY - Y) <- !move_toward(DX,DY).
+
++!builder_step :
+  current_task(_TN,_,_,Reqs) &
+  task_complete(Reqs) &
+  not on_goal & not known_goal(_,_) <- !explore_move.
+
++!builder_step :
+  current_task(TN,_,_,_) & two_block_task & not both_adjacent &
+  pick_adj_req(AX,AY,_BTA) &
+  pick_far_req_not(AX,AY,_RBX,_RBY,BTB) &
+  not help_ticket(TN,BTB,_,_) & tick(T) <-
+    +help_ticket(TN,BTB,open,T);
+    .my_name(Me); .print("[",Me,"] opened help_ticket for ",BTB," task=",TN);
+    !idle_action.
+
++!builder_step :
+  current_task(_TN,_,_,_) &
+  pick_adj_req(_RX,_RY,BT) & not carrying_type(BT) &
+  thing(DX,DY,dispenser,BT) & adjacent_dir(DX,DY,DDir) <-
+    .my_name(Me); .print("[",Me,"] request ",BT," dir=",DDir);
+    +pending_attach(DDir);
+    request(DDir).
+
++!builder_step :
+  current_task(_TN,_,_,_) &
+  pick_adj_req(_RX,_RY,BT) & not carrying_type(BT) &
+  known_dispenser(GX,GY,BT) & pos(X,Y) &
+  DX = (GX - X) & DY = (GY - Y) <- !move_toward(DX,DY).
+
++!builder_step :
+  current_task(TN,_,_,_) &
+  help_ticket(TN,_BT,taken(Helper),_) &
+  teammate_visible &
+  pick_adj_req(AX,AY,_BTA) <-
+    .my_name(Me); .print("[",Me,"] try connect with ",Helper);
+    connect(Helper, AX, AY).
+
++!builder_step :
+  current_task(_TN,_,_,_) & known_goal(GX,GY) & pos(X,Y) &
+  DX = (GX - X) & DY = (GY - Y) &
+  manhattan(X,Y,GX,GY,D) & D > 3 <- !move_toward(DX,DY).
+
++!builder_step :
+  current_task(_TN,_,_,_) & known_goal(GX,GY) & pos(X,Y) &
+  manhattan(X,Y,GX,GY,D) & D <= 3 &
+  builder_patrol_phase(P) & (P - (P/4)*4) == 0 <-
+    -builder_patrol_phase(P); P2 = (P+1); +builder_patrol_phase(P2);
+    !move_order(e,n,s,w).
+
++!builder_step :
+  current_task(_TN,_,_,_) & known_goal(GX,GY) & pos(X,Y) &
+  manhattan(X,Y,GX,GY,D) & D <= 3 &
+  builder_patrol_phase(P) & (P - (P/4)*4) == 1 <-
+    -builder_patrol_phase(P); P2 = (P+1); +builder_patrol_phase(P2);
+    !move_order(n,w,e,s).
+
++!builder_step :
+  current_task(_TN,_,_,_) & known_goal(GX,GY) & pos(X,Y) &
+  manhattan(X,Y,GX,GY,D) & D <= 3 &
+  builder_patrol_phase(P) & (P - (P/4)*4) == 2 <-
+    -builder_patrol_phase(P); P2 = (P+1); +builder_patrol_phase(P2);
+    !move_order(w,s,n,e).
+
++!builder_step :
+  current_task(_TN,_,_,_) & known_goal(GX,GY) & pos(X,Y) &
+  manhattan(X,Y,GX,GY,D) & D <= 3 &
+  builder_patrol_phase(P) & (P - (P/4)*4) == 3 <-
+    -builder_patrol_phase(P); P2 = (P+1); +builder_patrol_phase(P2);
+    !move_order(s,e,w,n).
+
++!builder_step : true <- !explore_move.
+
+!helper_step.
+
++!helper_step :
+  not helper_job(_,_,phase(_),issued(_),owner(_)) &
+  teammate_visible & help_ticket(TN,BT,open,Tick0) &
+  me(Me) <-
+    .broadcast(tell, claim_ticket(TN,BT,Me));
+    +helper_job(TN,BT,phase(fetching),issued(Tick0),owner(Me));
+    .my_name(N); .print("[",N,"] claimed ticket for ",BT," task=",TN);
+    !idle_action.
+
++!helper_step :
+  helper_job(_TN,BT,phase(fetching),issued(_),owner(_)) &
+  not carrying_type(BT) &
+  thing(DX,DY,dispenser,BT) & adjacent_dir(DX,DY,DDir) <-
+    .my_name(N); .print("[",N,"] request ",BT," dir=",DDir);
+    +pending_attach(DDir);
+    request(DDir).
+
++!helper_step :
+  helper_job(_TN,BT,phase(fetching),issued(_),owner(_)) &
+  not carrying_type(BT) &
+  known_dispenser(GX,GY,BT) & pos(X,Y) &
+  DX = (GX - X) & DY = (GY - Y) <- !move_toward(DX,DY).
+
++!helper_step :
+  helper_job(_TN,BT,phase(fetching),issued(_),owner(_)) &
+  not known_dispenser(_,_,BT) <- !explore_move.
+
++!helper_step :
+  helper_job(TN,BT,phase(fetching),issued(T0),owner(Me)) &
+  carrying_type(BT) <-
+    -helper_job(TN,BT,phase(fetching),issued(T0),owner(Me));
+    +helper_job(TN,BT,phase(to_goal),issued(T0),owner(Me));
+    .my_name(N); .print("[",N,"] got ",BT," -> to_goal");
+    !idle_action.
+
++!helper_step :
+  helper_job(_TN,_BT,phase(to_goal),issued(_),owner(_)) &
+  known_goal(GX,GY) & pos(X,Y) &
+  DX = (GX - X) & DY = (GY - Y) <- !move_toward(DX,DY).
+
++!helper_step :
+  helper_job(_TN,_BT,phase(to_goal),issued(_),owner(_)) &
+  not known_goal(_,_) <- !explore_move.
+
++!helper_step :
+  helper_job(TN,BT,phase(to_goal),issued(T0),owner(Me)) &
+  teammate_visible &
+  attached(AX,AY) & thing(AX,AY,block,BT) <-
+    -helper_job(TN,BT,phase(to_goal),issued(T0),owner(Me));
+    +helper_job(TN,BT,phase(connecting),issued(T0),owner(Me));
+    .my_name(N); .print("[",N,"] try connect to builder with ",BT);
+    connect(connectionA1, AX, AY).
+
++!helper_step :
+  helper_job(_TN,BT,phase(connecting),issued(_),owner(_)) &
+  attached(AX,AY) & thing(AX,AY,block,BT) <- connect(connectionA1, AX, AY).
+
++!helper_step :
+  helper_job(TN,BT,phase(connecting),issued(T0),owner(Me)) &
+  tick(T) & (T - T0) > 20 <-
+    .broadcast(tell, ticket_done(TN,BT));
+    -helper_job(TN,BT,phase(connecting),issued(T0),owner(Me));
+    .my_name(N); .print("[",N,"] marked done for ",BT," task=",TN);
+    !idle_action.
+
++!helper_step :
+  not helper_job(_,_,phase(_),issued(_),owner(_)) &
+  known_goal(GX,GY) & pos(X,Y) &
+  DX = (GX - X) & DY = (GY - Y) &
+  manhattan(X,Y,GX,GY,D) & D > 6 <- !move_toward(DX,DY).
+
++!helper_step : true <- !explore_move.
+
+!scout_step.
++!scout_step : not known_goal(_,_) <- !explore_move.
++!scout_step :
+  known_goal(GX,GY) & pos(X,Y) &
+  DX = (GX - X) & DY = (GY - Y) &
+  manhattan(X,Y,GX,GY,D) & D > 8 <- !move_toward(DX,DY).
++!scout_step : true <- !explore_move.
