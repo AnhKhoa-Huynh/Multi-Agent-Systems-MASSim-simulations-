@@ -8,23 +8,28 @@ executed by _MASSim_.
   <img src="https://multiagentcontest.org/2019/banner.png">
 </p>
 
+
+
+
+The code is organized around a hierarchical decision framework:
+!do_action → !submit_task → !exchange_info → !attach_block → !request_block → !go_to_dispenser → !move_random
+
+This design ensures that agents set higher priority on behaviours such as delivering tasks before attempting lower-value actions like random exploration. The next applicable plan will automatically be tried if the current goal cannot be met due to missing conditions.
+Leader and follower roles appear during coordination depending on the relative positions between agents and other factors. 
+
+Rather than selecting any available task at random, the agent evaluates task utility before submission. This favours tasks with higher rewards and those whose deadlines are approaching, improving the efficiency. When a task is received, the program extracts the block requirements and stores them in a belief format. Task utility is computed by:
+Utility = (Reward × 100) / (Deadline − CurrentStep)
+
+Without a proper pathfinding strategy, agents occasionally oscillate in dense areas. Relying on local heuristics only guides the agents toward targets using relative offset rather than calculating the most optimal paths. By not having proper role assignment, the agents sometimes compete for the same dispensers rather than distributing tasks effectively. The coordination protocol is sensitive to step synchronisation
+
+
+
+
+
 Download
 --------
 
 Clone this repository (or download it as zip).
-
-Documentation
--------------
-
-[server.md](docs/server.md) describes how the _MASSim_ server can be configured and started.
-
-[scenario.md](docs/scenario.md) contains the description of the current scenario.
-
-[protocol.md](docs/protocol.md) describes the _MASSim_ protocol, i.e. message formats for communicating with the _MASSim_ server.
-
-[eismassim.md](docs/eismassim.md) explains _EISMASSim_, a Java library using the Environment Interface Standard (EIS) to communicate with the _MASSim_ server, that can be used with platforms which support the EIS.
-
-[monitor.md](docs/monitor.md) describes how to view live matches and replays in the browser.
 
 License
 -------
